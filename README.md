@@ -29,6 +29,7 @@ across repositories, and `gh skill update` pulls newer versions of ones you alre
 | Skill | What it does | You will also need |
 |---|---|---|
 | [`hls-goals`](skills/hls-goals/) | Read and update the HLS Goals board over its REST API — list a team's goals, post markdown progress updates, attach artifacts as proof of work, complete goals. | An `HLS_GOALS_TOKEN` of your own. See below. |
+| [`hls-board`](skills/hls-board/) | Work a GitHub projects board with `gh` — read the board, start an issue on a linked branch, file a slim issue after brainstorming, defer work to the backlog, check whether a PR is ready. | `gh auth refresh -s project`, plus `HLS_BOARD_OWNER` and `HLS_BOARD_NUMBER`. |
 
 ### hls-goals needs a token before it works
 
@@ -48,6 +49,20 @@ The skill walks you through this on first use, but in short:
 
 Never paste a token into a chat or commit it to a file. Anything pasted into a conversation is written to the
 transcript on disk.
+
+### hls-board needs the project scope before it works
+
+`gh` does not request the `project` scope at login, so a `gh` you have been using happily for months still
+cannot read or move a card on a projects board. Grant it once:
+
+```bash
+gh auth refresh -s project
+```
+
+`read:project` is a weaker, separate scope: it lists a board but cannot move anything, which makes the failure
+look like a bug rather than a permission. Then set `HLS_BOARD_OWNER` and `HLS_BOARD_NUMBER` under `env` in
+`.claude/settings.local.json` — both come from the board URL — and run
+`skills/hls-board/scripts/verify-board-auth.sh`, which prints exactly what is missing.
 
 ## Adding a skill
 
