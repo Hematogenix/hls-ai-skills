@@ -132,6 +132,7 @@ left. Listing a 500-item board is a single query, so ordinary use will not come 
 |---|---|---|
 | `HLS_BOARD_OWNER` | the current repo's owner | org or user that owns the board |
 | `HLS_BOARD_NUMBER` | none, required | the number in the board URL |
+| `HLS_BOARD_BASE` | the repo's default branch | branch `work` branches from and `pr-create` targets |
 | `HLS_BOARD_STATUS_FIELD` | `Status` | the single-select field cards move between |
 | `HLS_BOARD_NEW` | `Todo` | status a newly filed issue lands in |
 | `HLS_BOARD_ACTIVE` | `In Progress` | status `work` moves a card to |

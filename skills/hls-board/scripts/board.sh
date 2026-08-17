@@ -13,6 +13,7 @@ ITEM_LIMIT="${HLS_BOARD_LIMIT:-500}"
 
 OWNER="${HLS_BOARD_OWNER:-}"
 NUMBER="${HLS_BOARD_NUMBER:-}"
+BASE_BRANCH="${HLS_BOARD_BASE:-}"
 ASSUME_YES=no
 
 CACHE=""
@@ -32,6 +33,7 @@ parse_common() {
         case "$1" in
             --owner)   OWNER="$2"; shift 2 ;;
             --project) NUMBER="$2"; shift 2 ;;
+            --base)    BASE_BRANCH="$2"; shift 2 ;;
             --yes)     ASSUME_YES=yes; shift ;;
             *)         REST+=("$1"); shift ;;
         esac
@@ -63,6 +65,13 @@ resolve_target() {
        It is the number in the board URL: github.com/orgs/$OWNER/projects/<number>
        Run scripts/verify-board-auth.sh to see the boards you can reach."
     [[ "$NUMBER" =~ ^[0-9]+$ ]] || die "--project takes the number from the board URL, got '$NUMBER'."
+}
+
+# The integration branch is not always the repo default: a repo can keep a legacy stack on `main` and merge
+# day-to-day work into something like `development`. Falling back to the default keeps old behaviour.
+resolve_base() {
+    [[ -n "$BASE_BRANCH" ]] || BASE_BRANCH="$(gh repo view --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null || true)"
+    [[ -n "$BASE_BRANCH" ]] || die "cannot tell which branch to base on. Pass --base, or set HLS_BOARD_BASE."
 }
 
 cache_dir() {
@@ -114,6 +123,22 @@ item_id_for_issue() {
     [[ -n "$id" ]] || die "issue #$num is not on project $NUMBER (searched the first $ITEM_LIMIT items).
        Add it first: gh project item-add $NUMBER --owner $OWNER --url \$(gh issue view $num --json url -q .url)"
     printf '%s' "$id"
+}
+
+# item-add returns before the new card shows up in item-list, so a freshly added issue has to be waited for
+# rather than looked up once. Each attempt drops the cached listing so the next read hits the API again.
+wait_for_item_for_issue() {
+    local num="$1" attempt
+    for attempt in 1 2 3 4 5 6; do
+        if items_json | jq -e --argjson n "$num" '
+            any(.items[]; .content.type == "Issue" and .content.number == $n)' >/dev/null; then
+            return 0
+        fi
+        rm -f "$(cache_dir)/items.json"
+        note "waiting for issue #$num to appear on project $NUMBER (attempt $attempt)"
+        sleep 2
+    done
+    return 1
 }
 
 # Takes an issue number, not an item id: `set_status "$(item_id_for_issue n)"` would swallow that lookup's
@@ -193,7 +218,8 @@ cmd_work() {
     git rev-parse --git-dir >/dev/null 2>&1 || die "not inside a git repository."
     git symbolic-ref -q HEAD >/dev/null || die "HEAD is detached. Check out a branch first — gh issue develop cannot branch from a detached HEAD."
 
-    gh issue develop "$n" --checkout
+    resolve_base
+    gh issue develop "$n" --base "$BASE_BRANCH" --checkout
     set_status_for_issue "$n" "${HLS_BOARD_ACTIVE:-In Progress}"
 
     echo
@@ -226,8 +252,15 @@ cmd_new() {
     gh project item-add "$NUMBER" --owner "$OWNER" --url "$url" >/dev/null
     rm -f "$(cache_dir)/items.json"   # the cached listing predates the item we just added
     local n; n="${url##*/}"
-    set_status_for_issue "$n" "${HLS_BOARD_NEW:-Todo}"
-    echo "added to project $NUMBER as ${HLS_BOARD_NEW:-Todo}"
+    if wait_for_item_for_issue "$n"; then
+        set_status_for_issue "$n" "${HLS_BOARD_NEW:-Todo}"
+        echo "added to project $NUMBER as ${HLS_BOARD_NEW:-Todo}"
+    else
+        # The card is on the board; only the status is unset, so this is a warning and not a failure.
+        note "added to project $NUMBER, but it has not shown up in the item list yet, so the status is still unset.
+       Set it once it appears: board.sh status $n \"${HLS_BOARD_NEW:-Todo}\" --yes"
+        echo "added to project $NUMBER (status not set yet)"
+    fi
 }
 
 cmd_defer() {
@@ -328,14 +361,15 @@ cmd_pr_create() {
     local body; body="$(mktemp)"
     printf 'Closes #%s\n' "$n" >"$body"
 
-    gh pr create --draft --title "$title" --body-file "$body"
+    resolve_base
+    gh pr create --draft --base "$BASE_BRANCH" --title "$title" --body-file "$body"
     rm -f "$body"
     cmd_pr
 }
 
 usage() {
     cat <<'EOF'
-usage: board.sh <command> [args] [--owner <o>] [--project <n>] [--yes]
+usage: board.sh <command> [args] [--owner <o>] [--project <n>] [--base <branch>] [--yes]
 
 reading (safe)
   board [status]                 every issue on the board, optionally one status only
@@ -344,15 +378,20 @@ reading (safe)
   pr [<n>]                       checks, review, mergeability, and what the PR closes
 
 writing (--yes required, except work)
-  work <n>                       gh issue develop --checkout, then move the card to In Progress
+  work <n>                       branch off the base, check it out, move the card to In Progress
   new --title "..." --body-file <f> [--label L] [--assign-me] --yes
   defer <n> --reason "..." --yes move to Backlog, comment why, unassign
   status <n> "<option>" --yes    move a card to any status
   comment <n> "text" --yes       short note on the issue
-  pr-create --yes                draft PR for the current branch with "Closes #n"
+  pr-create --yes                draft PR against the base with "Closes #n"
 
-env: HLS_BOARD_OWNER, HLS_BOARD_NUMBER, HLS_BOARD_BACKLOG (default Backlog),
-     HLS_BOARD_ACTIVE (In Progress), HLS_BOARD_NEW (Todo), HLS_BOARD_STATUS_FIELD (Status)
+base branch
+  work and pr-create use --base, else HLS_BOARD_BASE, else the repo default branch.
+  Set HLS_BOARD_BASE for a repo whose integration branch is not the default (e.g. development).
+
+env: HLS_BOARD_OWNER, HLS_BOARD_NUMBER, HLS_BOARD_BASE (repo default branch),
+     HLS_BOARD_BACKLOG (default Backlog), HLS_BOARD_ACTIVE (In Progress),
+     HLS_BOARD_NEW (Todo), HLS_BOARD_STATUS_FIELD (Status)
 EOF
 }
 
