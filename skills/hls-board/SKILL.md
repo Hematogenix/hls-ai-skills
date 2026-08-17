@@ -37,6 +37,18 @@ repo's owner.
 other words, set `HLS_BOARD_NEW`, `HLS_BOARD_ACTIVE` and `HLS_BOARD_BACKLOG` alongside the two above.
 `verify-board-auth.sh` names the mismatch for you.
 
+**4. Say which branch work merges into, if it is not the default.** `work` branches from it and `pr-create`
+targets it. Both fall back to the repo's default branch, which is right for most repos. Where it is not — a
+repo whose day-to-day branch is `development` while `main` holds an older stack — set it once so nobody has to
+remember:
+
+```json
+{ "env": { "HLS_BOARD_BASE": "development" } }
+```
+
+A single call can override it with `--base <branch>`. Record the repo's real integration branch in that repo's
+`CLAUDE.md` too, so it is visible without reading settings.
+
 ## The operations we use
 
 | Do this | Call |
@@ -83,12 +95,14 @@ mangled by shell quoting, and the file forces you to look at the length before i
 ### Working an issue
 
 1. `board.sh issue 123` — read it before touching anything. Check nobody else is assigned and no branch exists.
-2. `board.sh work 123` — creates the linked branch with `gh issue develop 123 --checkout` and moves the card to
-   In Progress. GitHub owns the branch name; do not invent your own, because the link is what ties the branch
-   to the issue in the UI.
+2. `board.sh work 123` — creates the linked branch off the base branch and moves the card to In Progress.
+   GitHub owns the branch name; do not invent your own, because the link is what ties the branch to the issue
+   in the UI.
 3. Do the work. Commit as normal.
-4. `board.sh pr-create --yes` when there is something to review. It opens a **draft** PR whose body says
-   `Closes #123`, so merging closes the issue.
+4. `board.sh pr-create --yes` when there is something to review. It opens a **draft** PR against the base
+   branch whose body says `Closes #123`, so merging closes the issue. On a repo whose base is not the default
+   branch, `board.sh pr` will report `closes: NOTHING` even with the keyword present — GitHub only links the
+   reference when merging would reach the default branch. Check the body rather than trusting that line.
 5. `board.sh pr` to watch checks. Merging is a human decision — never merge.
 
 If the issue turns out to be bigger than it read, say so and propose splitting it rather than quietly growing
