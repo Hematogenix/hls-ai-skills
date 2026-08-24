@@ -57,7 +57,7 @@ A single call can override it with `--base <branch>`. Record the repo's real int
 | See just my work | `board.sh mine` |
 | Read one issue before starting | `board.sh issue 123` |
 | Start work on it | `board.sh work 123` |
-| File a new issue | `board.sh new --title "..." --body-file <f> --assign-me --yes` |
+| File a new issue | `board.sh new --title "..." --body-file <f> --yes` |
 | Push it to the backlog | `board.sh defer 123 --reason "..." --yes` |
 | Move a card anywhere else | `board.sh status 123 "In Review" --yes` |
 | Leave a short note | `board.sh comment 123 "text" --yes` |
@@ -113,9 +113,11 @@ the branch.
 Brainstorming produces far more text than an issue should hold. Distil, don't transcribe.
 
 1. Say what you would file: title, one-line body, labels. Ask.
-2. Write the body to a file, then `board.sh new --title "..." --body-file /tmp/body.md --assign-me --yes`.
-3. It lands on the board as Todo. If several issues come out of one discussion, file them separately — one
-   issue per thing that can be finished on its own.
+2. Write the body to a file, then `board.sh new --title "..." --body-file /tmp/body.md --yes`.
+3. It lands on the board as Todo, unassigned. Filing an issue is not the same as taking it on, so leave it for
+   whoever picks it up. Add `--assign-me` only when the person says they are taking it now.
+4. If several issues come out of one discussion, file them separately — one issue per thing that can be
+   finished on its own.
 
 ### Deferring work to the backlog
 
