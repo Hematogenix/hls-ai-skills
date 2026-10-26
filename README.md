@@ -30,6 +30,7 @@ across repositories, and `gh skill update` pulls newer versions of ones you alre
 |---|---|---|
 | [`hls-goals`](skills/hls-goals/) | Read and update the HLS Goals board over its REST API — list a team's goals, post markdown progress updates, attach artifacts as proof of work, complete goals. | An `HLS_GOALS_TOKEN` of your own. See below. |
 | [`hls-board`](skills/hls-board/) | Work a GitHub projects board with `gh` — read the board, start an issue on a linked branch, file a slim issue after brainstorming, defer work to the backlog, check whether a PR is ready. | `gh auth refresh -s project`, plus `HLS_BOARD_OWNER` and `HLS_BOARD_NUMBER`. |
+| [`pr-description`](skills/pr-description/) | Write a PR body in a fixed format and build its review page — a pan-and-zoom flowchart of the PR's real code, where each box opens to its diff, arrows carry call descriptions, and tests sit beside the code they check. | Claude Code with the Artifact tool (claude.ai), plus `python3`, `git` and `gh`. |
 
 ### hls-goals needs a token before it works
 

@@ -1,0 +1,388 @@
+<title>__TITLE__</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
+<style>
+/* Layout: a code canvas. A slim header with the PR's identity and canvas controls, then a
+   pan-and-zoom board of code boxes joined by call arrows, tests docked beside their box,
+   and a slide-out panel for the changed files the flow doesn't show. */
+:root {
+  --bg: #eef0f3; --dots: #d3d8df; --panel: #ffffff; --fg: #1d2330; --muted: #5d6677; --line: #d9dee6;
+  --accent: #0b6e75; --accent-soft: #dff0f1; --edge: #8b95a5;
+  --add-bg: #e3f5e8; --add-mark: #2f9e55; --del-bg: #fcebeb; --del-mark: #c94141; --fold-bg: #f1f3f7;
+  --lane: #f7f8fa;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #101318; --dots: #232934; --panel: #1a1e26; --fg: #e3e7ee; --muted: #9aa3b2; --line: #2d3440;
+  --accent: #4fc3c9; --accent-soft: #163236; --edge: #66707f;
+  --add-bg: #14301e; --add-mark: #4cc372; --del-bg: #3a1a1c; --del-mark: #ef6b6b; --fold-bg: #202631;
+  --lane: #151920; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #101318; --dots: #232934; --panel: #1a1e26; --fg: #e3e7ee; --muted: #9aa3b2; --line: #2d3440;
+  --accent: #4fc3c9; --accent-soft: #163236; --edge: #66707f;
+  --add-bg: #14301e; --add-mark: #4cc372; --del-bg: #3a1a1c; --del-mark: #ef6b6b; --fold-bg: #202631;
+  --lane: #151920; color-scheme: dark }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.5 var(--sans); display: flex; flex-direction: column; overflow: hidden; }
+a { color: var(--accent); }
+.mono, code { font-family: var(--mono); }
+header.top { background: var(--panel); border-bottom: 1px solid var(--line); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px; display: grid; gap: 6px; flex: none; }
+.eyebrow { font: 500 11.5px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+h1 { margin: 0; font-size: clamp(17px, 2.2vw, 21px); line-height: 1.25; font-weight: 650; text-wrap: balance; }
+.summary { margin: 0; color: var(--muted); max-width: 90ch; font-size: 13.5px; }
+.bar { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 500 11.5px/1 var(--mono); padding: 5px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); font-variant-numeric: tabular-nums; }
+.p { color: var(--add-mark); } .m { color: var(--del-mark); }
+.tools { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+button.tool { font: 500 12.5px var(--sans); color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+button.tool:hover, button.tool:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+button.tool.icon { width: 30px; padding: 5px 0; font-family: var(--mono); }
+#viewport { position: relative; flex: 1; min-height: 0; overflow: hidden; touch-action: none; cursor: grab;
+  background-color: var(--bg); background-image: radial-gradient(var(--dots) 1px, transparent 1px); background-size: 22px 22px; }
+#viewport.dragging, #viewport.dragging * { cursor: grabbing !important; user-select: none; }
+#stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+#edges { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+#edges path { fill: none; stroke: var(--edge); stroke-width: 1.6; }
+#edges marker path { fill: var(--edge); stroke: none; }
+.elabel { position: absolute; transform: translate(-50%, -50%); font: 11.5px/1.3 var(--mono); color: var(--muted); background: var(--bg); padding: 2px 6px; border-radius: 4px; white-space: nowrap; pointer-events: none; }
+.elabel .desc { display: none; }
+.elabel[hidden] { display: none !important; }
+body.show-desc .elabel { white-space: normal; width: max-content; max-width: 280px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--edge); border-radius: 6px; padding: 6px 9px; display: grid; gap: 3px; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+body.show-desc .elabel .desc { display: block; font: 12px/1.45 var(--sans); color: var(--fg); }
+body.show-desc .elabel .call:empty { display: none; }
+.node { position: absolute; display: flex; align-items: flex-start; transition: left .25s ease, top .25s ease; }
+.box { width: 300px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,.06); cursor: default; }
+.node.open .box { width: max-content; min-width: 300px; border-color: var(--accent); }
+.node.nocode .box { border-style: dashed; }
+.head { display: grid; grid-template-columns: auto 1fr auto auto; gap: 8px; align-items: baseline; width: 100%; text-align: left; background: none; border: 0; color: var(--fg); font: 600 13.5px/1.35 var(--sans); padding: 10px 12px 4px; cursor: pointer; border-radius: 10px 10px 0 0; }
+.head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tw { color: var(--muted); font-size: 11px; transition: transform .15s; display: inline-block; }
+.open > .box .head .tw, .test.open .tw { transform: rotate(90deg); }
+.stat { font: 500 11.5px var(--mono); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sub { padding: 0 12px 0 32px; font: 11.5px/1.5 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.note { padding: 2px 12px 10px 32px; font-size: 12.5px; color: var(--muted); }
+.code { border-top: 1px solid var(--line); }
+table.lines { border-collapse: collapse; font: 12px/1.6 var(--mono); min-width: 100%; }
+table.lines td { padding: 0 10px; white-space: pre; vertical-align: top; }
+table.lines td.n { width: 1%; text-align: right; color: var(--muted); user-select: none; padding: 0 6px; font-variant-numeric: tabular-nums; }
+table.lines tr.add td { background: var(--add-bg); }
+table.lines tr.add td:first-child { box-shadow: inset 3px 0 0 var(--add-mark); }
+table.lines tr.del td { background: var(--del-bg); }
+table.lines tr.del td:first-child { box-shadow: inset 3px 0 0 var(--del-mark); }
+table.lines tr.hunk td { background: var(--fold-bg); color: var(--muted); }
+table.lines tr.fold td { background: var(--fold-bg); color: var(--accent); cursor: pointer; text-align: left; padding-block: 2px; font-family: var(--sans); font-size: 12px; }
+table.lines tr.fold:hover td { text-decoration: underline; }
+.lane { margin-left: 10px; padding: 8px 8px 8px 12px; border-left: 2px dashed var(--line); display: grid; gap: 6px; width: 220px; }
+.node.lane-open .lane { width: max-content; }
+body:not(.show-tests) .lane { display: none; }
+.tcount { font: 500 11px/1 var(--mono); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 3px 7px; white-space: nowrap; }
+body.show-tests .tcount { display: none; }
+label.tool { display: inline-flex; align-items: center; gap: 6px; font: 500 12.5px var(--sans); color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+label.tool:has(input:focus-visible) { border-color: var(--accent); color: var(--accent); }
+label.tool input { margin: 0; accent-color: var(--accent); }
+.lane-label { font: 600 10.5px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.test { background: var(--lane); border: 1px solid var(--line); border-radius: 8px; }
+.test .head { font-size: 12.5px; font-weight: 500; padding: 6px 10px; }
+.test .head .t { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+
+#drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(620px, 100vw); background: var(--panel); border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(0,0,0,.12); z-index: 20; display: flex; flex-direction: column; transform: translateX(105%); transition: transform .25s ease; padding-top: env(safe-area-inset-top, 0px); }
+#drawer.show { transform: none; }
+.dhead { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.dhead h2 { margin: 0; font-size: 16px; flex: 1; }
+.dbody { overflow: auto; padding: 8px 16px 40px; padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 8px; align-content: start; }
+.dbody h3 { margin: 14px 0 2px; font-size: 12px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.ofile { border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+.ofile .head { font-weight: 500; font-size: 12.5px; }
+.ofile .t { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+.ofile .note { padding-left: 30px; }
+.ofile.open .tw { transform: rotate(90deg); }
+#drawer table.lines td:last-child { white-space: pre-wrap; overflow-wrap: anywhere; }
+#drawer table.lines { min-width: 0; width: 100%; table-layout: auto; }
+.more { padding: 8px 12px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
+.hint { position: absolute; left: max(12px, env(safe-area-inset-left, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); font-size: 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; pointer-events: none; }
+#err { margin: 24px; color: var(--del-mark); }
+@media (max-width: 640px) { .summary { display: none; } .chips { display: none; } .tools { margin-left: 0; } .hint { right: max(12px, env(safe-area-inset-right, 0px)); } }
+@media (prefers-reduced-motion: reduce) { .node, #drawer, .tw { transition: none; } }
+</style>
+
+<header class="top">
+  <div class="eyebrow" id="eyebrow"></div>
+  <h1 id="title"></h1>
+  <p class="summary" id="summary"></p>
+  <div class="bar">
+    <div class="chips" id="chips"></div>
+    <div class="tools">
+      <label class="tool" for="showTests"><input type="checkbox" id="showTests"> Show tests</label>
+      <label class="tool" for="showDesc"><input type="checkbox" id="showDesc"> Show descriptions</label>
+      <button class="tool" id="openAll" type="button">Expand all</button>
+      <button class="tool" id="closeAll" type="button">Collapse all</button>
+      <button class="tool icon" id="zoomOut" type="button" aria-label="Zoom out">−</button>
+      <button class="tool icon" id="zoomIn" type="button" aria-label="Zoom in">+</button>
+      <button class="tool" id="fit" type="button">Fit</button>
+      <button class="tool" id="others" type="button" aria-controls="drawer" aria-expanded="false">Other files</button>
+    </div>
+  </div>
+</header>
+<div id="viewport" aria-label="Code flow canvas">
+  <div id="stage"><svg id="edges"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"></path></marker></defs></svg></div>
+  <div class="hint" id="hint">Drag anywhere to move · scroll to pan · Ctrl + scroll or pinch to zoom · click a box to open it</div>
+</div>
+<aside id="drawer" aria-label="Other changed files">
+  <div class="dhead"><h2>Other changed files</h2><button class="tool" id="closeDrawer" type="button">Close</button></div>
+  <div class="dbody" id="dbody"></div>
+</aside>
+
+<script type="application/json" id="data">__DATA__</script>
+<script>
+(function () {
+  const D = JSON.parse(document.getElementById("data").textContent);
+  const $ = (s) => document.querySelector(s);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const gh = (p, a, b) => `https://github.com/${D.repo}/blob/${D.head_sha}/${p}` + (a ? `#L${a}` + (b && b !== a ? `-L${b}` : "") : "");
+  const count = (rows) => rows.reduce((s, r) => { if (r[0] === "+") s[0]++; else if (r[0] === "-") s[1]++; return s; }, [0, 0]);
+  const statEl = (rows) => { const [p, m] = count(rows); const s = el("span", "stat"); if (p || m) s.append(el("span", "p", `+${p}`), " ", el("span", "m", `−${m}`)); else s.append(el("span", null, "context")); return s; };
+
+  $("#eyebrow").textContent = D.repo + (D.pr ? ` · #${D.pr}` : "") + ` · ${D.head_sha.slice(0, 7)}`;
+  $("#title").textContent = D.title;
+  $("#summary").textContent = D.summary;
+  D.totals.forEach(([g, n, p, m]) => { const c = el("span", "chip"); c.append(`${g} ${n} `, el("span", "p", `+${p}`), " ", el("span", "m", `−${m}`)); $("#chips").append(c); });
+  $("#others").textContent = `Other files (${D.others.length})`;
+  if (typeof dagre === "undefined") { $("#viewport").replaceChildren(el("p", null, "The layout library didn't load. Reload the page.")); $("#viewport").firstChild.id = "err"; return; }
+
+  // Code table: diff rows with long unchanged runs folded; onChange re-lays out the canvas.
+  function codeTable(rows, onChange) {
+    const t = el("table", "lines");
+    const addRow = (r) => {
+      const [k, o, n, text] = r;
+      const tr = el("tr", { "+": "add", "-": "del", "@": "hunk", " ": "" }[k]);
+      if (k === "@") { const td = el("td", null, text); td.colSpan = 3; tr.append(td); }
+      else tr.append(el("td", "n", o == null ? "" : String(o)), el("td", "n", n == null ? "" : String(n)), el("td", null, text));
+      t.append(tr);
+    };
+    let i = 0;
+    while (i < rows.length) {
+      if (rows[i][0] !== " ") { addRow(rows[i++]); continue; }
+      let j = i; while (j < rows.length && rows[j][0] === " ") j++;
+      const run = rows.slice(i, j), headKeep = i === 0 ? 0 : 3, tailKeep = j === rows.length ? 0 : 3;
+      if (run.length > headKeep + tailKeep + 4) {
+        run.slice(0, headKeep).forEach(addRow);
+        const hidden = run.slice(headKeep, run.length - tailKeep);
+        const tr = el("tr", "fold"); const td = el("td", null, `⋯ ${hidden.length} unchanged lines (${hidden[0][2]}–${hidden[hidden.length - 1][2]})`); td.colSpan = 3; tr.append(td);
+        tr.addEventListener("click", () => { hidden.forEach((r) => { addRow(r); tr.before(t.rows[t.rows.length - 1]); }); tr.remove(); onChange && onChange(); });
+        t.append(tr);
+        run.slice(run.length - tailKeep).forEach(addRow);
+      } else run.forEach(addRow);
+      i = j;
+    }
+    return t;
+  }
+
+  // Canvas state
+  const viewport = $("#viewport"), stage = $("#stage"), svg = $("#edges");
+  const view = { x: 40, y: 30, k: 1 };
+  const apply = () => { stage.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.k})`; };
+  const nodeEls = {};
+  let graphSize = { w: 0, h: 0 };
+
+  function toggle(nodeEl, open, anchor) {
+    nodeEl.classList.toggle("open", open);
+    nodeEl.querySelector(":scope > .box > .head").setAttribute("aria-expanded", String(open));
+    const code = nodeEl.querySelector(":scope > .box > .code"); if (code) code.hidden = !open;
+    layout(anchor ? nodeEl.id : null);
+  }
+
+  D.nodes.forEach((n) => {
+    const node = el("div", "node" + (n.code ? "" : " nocode")); node.id = "n-" + n.id; nodeEls[n.id] = node;
+    const box = el("div", "box");
+    const head = el("button", "head"); head.type = "button"; head.setAttribute("aria-expanded", "false");
+    head.append(el("span", "tw", n.code ? "▶" : "•"), el("span", "t", n.title));
+    if (n.code) head.append(statEl(n.code.rows));
+    box.append(head);
+    if (n.code) {
+      const sub = el("div", "sub"); const a = el("a", null, `${n.code.file}:${n.code.start}–${n.code.end}`); a.href = gh(n.code.file, n.code.start, n.code.end); a.target = "_blank"; a.rel = "noopener"; sub.append(a); box.append(sub);
+    }
+    if (n.note) box.append(el("div", "note", n.note));
+    if (n.code) {
+      const code = el("div", "code"); code.hidden = true; code.append(codeTable(n.code.rows, () => layout(node.id))); box.append(code);
+      head.addEventListener("click", () => toggle(node, !node.classList.contains("open"), true));
+    }
+    node.append(box);
+    if (n.tests.length) {
+      const lane = el("div", "lane"); lane.append(el("div", "lane-label", `Tests (${n.tests.length})`));
+      head.append(el("span", "tcount", `${n.tests.length} test${n.tests.length === 1 ? "" : "s"}`));
+      n.tests.forEach((t) => {
+        const item = el("div", "test");
+        const th = el("button", "head"); th.type = "button"; th.setAttribute("aria-expanded", "false");
+        th.append(el("span", "tw", "▶"), el("span", "t", t.label), statEl(t.rows));
+        const code = el("div", "code"); code.hidden = true; code.append(codeTable(t.rows, () => layout(node.id)));
+        th.addEventListener("click", () => {
+          const open = !item.classList.contains("open"); item.classList.toggle("open", open); th.setAttribute("aria-expanded", String(open)); code.hidden = !open;
+          node.classList.toggle("lane-open", !!lane.querySelector(".test.open")); layout(node.id);
+        });
+        item.append(th, code); lane.append(item);
+      });
+      node.append(lane);
+    }
+    stage.append(node);
+    if (n.open) { node.classList.add("open"); head.setAttribute("aria-expanded", "true"); const c = box.querySelector(".code"); if (c) c.hidden = false; }
+  });
+
+  const labelEls = D.edges.map((e) => {
+    const l = el("div", "elabel"); l.append(el("span", "call", e.label || ""));
+    if (e.description) l.append(el("span", "desc", e.description));
+    stage.append(l); return l;
+  });
+  const showsLabel = (e) => !!e.label || (document.body.classList.contains("show-desc") && !!e.description);
+
+  function layout(anchorId) {
+    let before = null;
+    if (anchorId) { const r = document.getElementById(anchorId).getBoundingClientRect(); before = { x: r.left, y: r.top }; }
+    const g = new dagre.graphlib.Graph({ multigraph: true });
+    g.setGraph({ rankdir: D.rankdir, nodesep: 46, ranksep: 70, edgesep: 24, marginx: 30, marginy: 30 });
+    g.setDefaultEdgeLabel(() => ({}));
+    D.nodes.forEach((n) => { const e = nodeEls[n.id]; g.setNode(n.id, { width: e.offsetWidth, height: e.offsetHeight }); });
+    D.edges.forEach((e, i) => { const l = labelEls[i], on = showsLabel(e); l.hidden = !on; g.setEdge(e.from, e.to, { width: on ? l.offsetWidth : 0, height: on ? l.offsetHeight : 0, labelpos: "c" }, "e" + i); });
+    dagre.layout(g);
+    D.nodes.forEach((n) => { const p = g.node(n.id), e = nodeEls[n.id]; e.style.left = (p.x - p.width / 2) + "px"; e.style.top = (p.y - p.height / 2) + "px"; });
+    const gr = g.graph(); graphSize = { w: gr.width, h: gr.height };
+    svg.setAttribute("width", gr.width); svg.setAttribute("height", gr.height);
+    svg.querySelectorAll("path.edge").forEach((p) => p.remove());
+    D.edges.forEach((e, i) => {
+      const ed = g.edge(e.from, e.to, "e" + i), pts = ed.points;
+      let d = `M${pts[0].x},${pts[0].y}`;
+      for (let j = 1; j < pts.length - 1; j++) { const mx = (pts[j].x + pts[j + 1].x) / 2, my = (pts[j].y + pts[j + 1].y) / 2; d += ` Q${pts[j].x},${pts[j].y} ${mx},${my}`; }
+      d += ` L${pts[pts.length - 1].x},${pts[pts.length - 1].y}`;
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path"); path.setAttribute("d", d); path.setAttribute("class", "edge"); path.setAttribute("marker-end", "url(#arrow)"); svg.append(path);
+      if (showsLabel(e)) { labelEls[i].style.left = ed.x + "px"; labelEls[i].style.top = ed.y + "px"; }
+    });
+    if (before) {
+      // Keep the box that was clicked where it was on screen; nodes move with a transition, so use the target position.
+      const e = document.getElementById(anchorId), vr = viewport.getBoundingClientRect();
+      const nx = parseFloat(e.style.left) * view.k + view.x + vr.left, ny = parseFloat(e.style.top) * view.k + view.y + vr.top;
+      view.x += before.x - nx; view.y += before.y - ny; apply();
+    }
+  }
+
+  function fit() {
+    const vw = viewport.clientWidth, vh = viewport.clientHeight;
+    view.k = Math.min(1, (vw - 40) / graphSize.w, (vh - 40) / graphSize.h);
+    view.x = (vw - graphSize.w * view.k) / 2; view.y = Math.max(20, (vh - graphSize.h * view.k) / 2); apply();
+  }
+  function start() {
+    // Readable first view: full size, flow's top centered; Fit shows the whole board.
+    // Center the first box; if it's wider than the screen, line its left edge up with the gutter.
+    const vw = viewport.clientWidth, first = nodeEls[D.nodes[0].id];
+    view.k = Math.min(1, Math.max(0.6, (vw - 32) / graphSize.w));
+    const left = parseFloat(first.style.left), w = first.offsetWidth;
+    view.x = Math.max(vw / 2 - (left + w / 2) * view.k, 16 - left * view.k);
+    if (w * view.k > vw - 32) view.x = 16 - left * view.k;
+    view.y = 16 - parseFloat(first.style.top) * view.k + 16; apply();
+  }
+  function zoomAt(f, cx, cy) {
+    const k = Math.min(2.5, Math.max(0.15, view.k * f)); f = k / view.k;
+    view.x = cx - (cx - view.x) * f; view.y = cy - (cy - view.y) * f; view.k = k; apply();
+  }
+
+  // Pan by dragging anywhere, boxes and code included; a press that moves under 5px stays a click.
+  // Pinch or Ctrl+wheel zooms; the plain wheel pans. Mouse presses reset the pointer list, so a release
+  // the page never saw (outside the window, or taken by the browser) can't leave a stale pointer behind.
+  const pointers = new Map(); let pan = null, pinch = null, suppressClick = false;
+  viewport.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (e.target.closest("#hint")) return;
+    if (e.pointerType === "mouse" || e.isPrimary) pointers.clear();  // a new gesture starts clean
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 1) { pan = { id: e.pointerId, sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y, moving: false }; pinch = null; }
+    else if (pointers.size === 2) {
+      const [p1, p2] = [...pointers.values()]; pinch = { d: Math.hypot(p1.x - p2.x, p1.y - p2.y) }; pan = null;
+      try { viewport.setPointerCapture(e.pointerId); } catch (_) {}
+    }
+  });
+  viewport.addEventListener("pointermove", (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    if (e.pointerType === "mouse" && !(e.buttons & 1)) { end(e); return; }
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && pointers.size === 2) {
+      const [p1, p2] = [...pointers.values()], d = Math.hypot(p1.x - p2.x, p1.y - p2.y), r = viewport.getBoundingClientRect();
+      zoomAt(d / pinch.d, (p1.x + p2.x) / 2 - r.left, (p1.y + p2.y) / 2 - r.top); pinch.d = d; return;
+    }
+    if (!pan || e.pointerId !== pan.id) return;
+    const dx = e.clientX - pan.sx, dy = e.clientY - pan.sy;
+    if (!pan.moving && Math.hypot(dx, dy) < 5) return;
+    if (!pan.moving) {
+      pan.moving = true; viewport.classList.add("dragging");
+      try { viewport.setPointerCapture(e.pointerId); } catch (_) {}
+      const sel = window.getSelection && window.getSelection(); if (sel) sel.removeAllRanges();
+    }
+    view.x = pan.vx + dx; view.y = pan.vy + dy; apply();
+  });
+  function end(e) {
+    pointers.delete(e.pointerId);
+    if (pan && pan.id === e.pointerId) { if (pan.moving) { suppressClick = true; setTimeout(() => { suppressClick = false; }, 0); } pan = null; }
+    if (pointers.size < 2) pinch = null;
+    if (!pointers.size) viewport.classList.remove("dragging");
+  }
+  ["pointerup", "pointercancel", "lostpointercapture"].forEach((t) => viewport.addEventListener(t, end));
+  window.addEventListener("blur", () => { pointers.clear(); pan = null; pinch = null; viewport.classList.remove("dragging"); });
+  // A drag that ends on a box header or a link shouldn't also open, close or follow it.
+  viewport.addEventListener("click", (e) => { if (suppressClick) { e.stopPropagation(); e.preventDefault(); suppressClick = false; } }, true);
+  viewport.addEventListener("dragstart", (e) => e.preventDefault());
+  viewport.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const r = viewport.getBoundingClientRect();
+    if (e.ctrlKey || e.metaKey) { zoomAt(Math.exp(-e.deltaY * 0.01), e.clientX - r.left, e.clientY - r.top); return; }
+    view.x -= e.deltaX; view.y -= e.deltaY; apply();
+  }, { passive: false });
+  const center = () => [viewport.clientWidth / 2, viewport.clientHeight / 2];
+  $("#zoomIn").addEventListener("click", () => zoomAt(1.2, ...center()));
+  $("#zoomOut").addEventListener("click", () => zoomAt(1 / 1.2, ...center()));
+  $("#fit").addEventListener("click", fit);
+  const setAll = (open) => { Object.values(nodeEls).forEach((n) => { if (n.classList.contains("nocode")) return; n.classList.toggle("open", open); n.querySelector(":scope > .box > .head").setAttribute("aria-expanded", String(open)); n.querySelector(":scope > .box > .code").hidden = !open; }); layout(null); };
+  $("#openAll").addEventListener("click", () => setAll(true));
+  // Tests and arrow descriptions stay off the canvas until asked for; each viewer's choice is remembered.
+  // Shown tests start collapsed.
+  function toggleSetting(id, cls) {
+    const box = $("#" + id);
+    const set = (on) => { document.body.classList.toggle(cls, on); box.checked = on; layout(null); };
+    try { if (localStorage.getItem(id) === "1") set(true); } catch (_) {}
+    box.addEventListener("change", () => { set(box.checked); try { localStorage.setItem(id, box.checked ? "1" : "0"); } catch (_) {} });
+    return box;
+  }
+  const showTests = toggleSetting("showTests", "show-tests");
+  const showDesc = toggleSetting("showDesc", "show-desc");
+  if (!D.edges.some((e) => e.description)) showDesc.closest("label").hidden = true;
+  if (!D.nodes.some((n) => n.tests.length)) showTests.closest("label").hidden = true;
+  $("#closeAll").addEventListener("click", () => setAll(false));
+
+  // Other files panel
+  const drawer = $("#drawer"), dbody = $("#dbody");
+  const showDrawer = (on) => { drawer.classList.toggle("show", on); $("#others").setAttribute("aria-expanded", String(on)); };
+  $("#others").addEventListener("click", () => showDrawer(!drawer.classList.contains("show")));
+  $("#closeDrawer").addEventListener("click", () => showDrawer(false));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") showDrawer(false); });
+  let lastGroup = null;
+  if (!D.others.length) dbody.append(el("p", "note", "Every changed file is in the flow."));
+  D.others.forEach((f) => {
+    if (f.group !== lastGroup) { dbody.append(el("h3", null, f.group)); lastGroup = f.group; }
+    const item = el("div", "ofile");
+    const h = el("button", "head"); h.type = "button"; h.setAttribute("aria-expanded", "false");
+    const s = el("span", "stat"); if (f.binary) s.textContent = "binary"; else s.append(el("span", "p", `+${f.add}`), " ", el("span", "m", `−${f.del}`));
+    h.append(el("span", "tw", "▶"), el("span", "t", f.path + (f.old ? `  (from ${f.old})` : "")), s);
+    item.append(h); if (f.note) item.append(el("div", "note", f.note));
+    const body = el("div"); body.hidden = true;
+    if (f.rows.length) { const c = el("div", "code"); c.append(codeTable(f.rows)); body.append(c); }
+    if (f.truncated || !f.rows.length) { const m = el("div", "more"); const a = el("a", null, "view it on GitHub"); a.href = gh(f.path); a.target = "_blank"; a.rel = "noopener"; m.append(f.truncated ? "Diff cut short; " : f.binary ? "Binary file; " : "No diff shown; ", a, "."); body.append(m); }
+    h.addEventListener("click", () => { const o = !item.classList.contains("open"); item.classList.toggle("open", o); h.setAttribute("aria-expanded", String(o)); body.hidden = !o; });
+    item.append(body); dbody.append(item);
+  });
+
+  layout(null); start();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => layout(null));
+  if (location.hash === "#changes") showDrawer(true);
+  setTimeout(() => { $("#hint").hidden = true; }, 9000);
+})();
+</script>
