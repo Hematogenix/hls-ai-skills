@@ -1,6 +1,6 @@
 ---
 name: pr-description
-description: Write or rewrite a GitHub pull request description in the team's fixed format, and build the PR's review page, a claude.ai artifact that is a pan-and-zoom flowchart of the PR's actual code: each box is a block of code that expands into its diff, arrows follow the calls, tests sit collapsed beside the box they test, and other changed files sit in a side panel. Use this whenever a PR is being opened, its body drafted, updated or fixed, or the user asks for a PR description, PR body, PR summary, review page or "write up the PR", even if they don't say "skill" or name the format. Also use it before any `gh pr create` or `gh pr edit --body`.
+description: Write or rewrite a GitHub pull request description in the team's fixed format and build the PR's review page — a claude.ai artifact showing a pan-and-zoom flowchart of the PR's actual code, where each box expands into its diff, arrows follow the calls, tests sit collapsed beside the code they check, and other changed files sit in a side panel. Use this whenever a PR is being opened, its body drafted, updated or fixed, or the user asks for a PR description, PR body, PR summary, review page or "write up the PR", even if they don't say "skill" or name the format. Also use it before any `gh pr create` or `gh pr edit --body`.
 ---
 
 # PR descriptions and review pages
