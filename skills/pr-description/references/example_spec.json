@@ -1,0 +1,536 @@
+{
+  "title": "HDX test tables: let every HDX form through",
+  "page_title": "HDX Test Tables Review",
+  "repo": "Hematogenix/datahub-airflow",
+  "pr": 362,
+  "summary": "Adds silver.temp_hdx and silver.temp_hdx_categorized, built beside silver.hdx but without the double-entry and accession holds, so every form shows up labeled with its entry type.",
+  "rankdir": "TB",
+  "nodes": [
+    {
+      "id": "dags",
+      "title": "Two temp DAGs and their triggers",
+      "note": "temp_load_hdx runs when silver_load_hdx would; the categorized DAG runs on its output.",
+      "file": "airflow/dags/temp_hdx.py",
+      "lines": [
+        1,
+        14
+      ],
+      "open": true
+    },
+    {
+      "id": "build",
+      "title": "temp_dag: one task runs every step",
+      "note": "Resolves the window, runs the model per bucket, advances the watermark.",
+      "file": "airflow/datahub_pipelines/layer_dags.py",
+      "lines": [
+        117,
+        180
+      ],
+      "tests": [
+        {
+          "file": "airflow/tests/test_dags.py",
+          "lines": [
+            95,
+            108
+          ],
+          "label": "test_dags.py: one task"
+        }
+      ]
+    },
+    {
+      "id": "run_model",
+      "title": "run_model: shared change to row counting",
+      "note": "Counts rows written to silver. or gold., not the model's own layer. Same result for every existing layer.",
+      "file": "airflow/datahub_pipelines/layers.py",
+      "lines": [
+        170,
+        214
+      ],
+      "tests": [
+        {
+          "file": "airflow/tests/live/scenarios.py",
+          "label": "live/scenarios.py"
+        }
+      ]
+    },
+    {
+      "id": "maps",
+      "title": "010 maps: mappings in the window",
+      "file": "airflow/sql/temp/hdx/010_maps.sql.jinja",
+      "lines": [
+        1,
+        23
+      ],
+      "tests": [
+        {
+          "file": "airflow/tests/scenarios/temp_hdx_entry_types/01_build/bronze/hdx_patient_protocol_entry_mapping.csv",
+          "label": "scenario 1: mappings (input)"
+        },
+        {
+          "file": "airflow/tests/scenarios/temp_hdx_entry_types/02_settled/bronze/hdx_patient_protocol_entry_mapping.csv",
+          "label": "scenario 2: mappings, one deleted (input)"
+        }
+      ]
+    },
+    {
+      "id": "deleted",
+      "title": "020 deleted: tombstones flag a form deleted",
+      "file": "airflow/sql/temp/hdx/020_deleted.sql.jinja",
+      "lines": [
+        1,
+        42
+      ]
+    },
+    {
+      "id": "entry_data",
+      "title": "030 entry data: field values per entry",
+      "file": "airflow/sql/temp/hdx/030_entry_data.sql.jinja",
+      "lines": [
+        1,
+        10
+      ],
+      "tests": [
+        {
+          "file": "airflow/tests/scenarios/temp_hdx_entry_types/01_build/bronze/hdx_patient_protocol_entry_data.csv",
+          "label": "scenario 1: entry values (input)"
+        },
+        {
+          "file": "airflow/tests/scenarios/temp_hdx_entry_types/02_settled/bronze/hdx_patient_protocol_entry_data.csv",
+          "label": "scenario 2: settled values (input)"
+        }
+      ]
+    },
+    {
+      "id": "spine",
+      "title": "040 spine: left joins replace the double-entry gate",
+      "note": "A missing enrollment, subject, protocol or entry leaves NULLs that entry_type turns into ERROR.",
+      "file": "airflow/sql/temp/hdx/040_spine.sql.jinja",
+      "lines": [
+        1,
+        81
+      ],
+      "tests": [
+        {
+          "file": "airflow/tests/scenarios/temp_hdx_entry_types/01_build/bronze/hdx_patient_protocol.csv",
+          "label": "scenario 1: enrollments (input)"
+        },
+        {
+          "file": "airflow/tests/scenarios/temp_hdx_entry_types/01_build/bronze/hdx_patient.csv",
+          "label": "scenario 1: subjects (input)"
+        },
+        {
+          "file": "airflow/tests/scenarios/temp_hdx_entry_types/01_build/bronze/hdx_patient_protocol_entry.csv",
+          "label": "scenario 1: entries (input)"
+        },
+        {
+          "file": "airflow/tests/scenarios/temp_hdx_entry_types/01_build/bronze/hdx_study_protocol.csv",
+          "label": "scenario 1: protocols (input)"
+        },
+        {
+          "file": "airflow/tests/scenarios/temp_hdx_entry_types/01_build/bronze/hdx_study_protocol_form.csv",
+          "label": "scenario 1: protocol forms (input)"
+        },
+        {
+          "file": "airflow/tests/scenarios/temp_hdx_entry_types/01_build/bronze/hdx_hls_user.csv",
+          "label": "scenario 1: users (input)"
+        }
+      ]
+    },
+    {
+      "id": "audit",
+      "title": "050 audit fields: superuser resolutions",
+      "note": "Same as silver/hdx; feeds the complete value.",
+      "file": "airflow/sql/temp/hdx/050_audit_fields.sql.jinja",
+      "lines": [
+        1,
+        42
+      ],
+      "tests": [
+        {
+          "file": "airflow/tests/scenarios/temp_hdx_entry_types/02_settled/bronze/hdx_hls_audit.csv",
+          "label": "scenario 2: superuser resolution (input)"
+        }
+      ]
+    },
+    {
+      "id": "entry_type",
+      "title": "entry_type: the first label that fits",
+      "note": "COMPLETE is exactly what silver.hdx publishes.",
+      "file": "airflow/sql/macros/temp_hdx.sql.jinja",
+      "lines": [
+        24,
+        36
+      ]
+    },
+    {
+      "id": "sql_py",
+      "title": "sql.template_module: read a macro's values",
+      "note": "Lets tests check the staged columns against the macro's column lists.",
+      "file": "airflow/datahub_pipelines/sql.py",
+      "lines": [
+        19,
+        28
+      ],
+      "tests": [
+        {
+          "file": "airflow/tests/test_migrations.py",
+          "lines": [
+            225,
+            260
+          ],
+          "label": "test_migrations.py: temp models"
+        }
+      ]
+    },
+    {
+      "id": "candidates",
+      "title": "060 accession candidates, keyed per form",
+      "file": "airflow/sql/temp/hdx/060_accession_candidates.sql.jinja",
+      "lines": [
+        1,
+        124
+      ]
+    },
+    {
+      "id": "accession_sql",
+      "title": "070 accession: candidates for the gate",
+      "note": "A Python step: run by hdx.temp_gate, not as SQL.",
+      "file": "airflow/sql/temp/hdx/070_accession.sql.jinja",
+      "lines": [
+        1,
+        3
+      ]
+    },
+    {
+      "id": "gate",
+      "title": "hdx.gate takes a target; temp_gate",
+      "note": "The same accession ladder, writing to staging.temp_hdx_accession.",
+      "file": "airflow/datahub_pipelines/hdx.py",
+      "lines": [
+        1,
+        41
+      ]
+    },
+    {
+      "id": "agree",
+      "title": "080 source: do the entries agree?",
+      "note": "Per field; NULL on a single entry.",
+      "file": "airflow/sql/temp/hdx/080_source.sql.jinja",
+      "lines": [
+        60,
+        80
+      ]
+    },
+    {
+      "id": "complete_value",
+      "title": "080 source: complete value and status",
+      "note": "Superuser's choice, else agreed or single value, else NULL.",
+      "file": "airflow/sql/temp/hdx/080_source.sql.jinja",
+      "lines": [
+        108,
+        150
+      ],
+      "tests": [
+        {
+          "file": "airflow/tests/scenarios/temp_hdx_entry_types/01_build/expected/silver.temp_hdx.csv",
+          "label": "expected silver.temp_hdx (step 1)"
+        },
+        {
+          "file": "airflow/tests/scenarios/temp_hdx_entry_types/02_settled/expected/silver.temp_hdx.csv",
+          "label": "expected silver.temp_hdx (step 2)"
+        },
+        {
+          "file": "airflow/tests/scenarios/temp_hdx_entry_types/README.md",
+          "label": "scenario README: what each form covers"
+        }
+      ]
+    },
+    {
+      "id": "upsert",
+      "title": "090 upsert into silver.temp_hdx",
+      "file": "airflow/sql/temp/hdx/090_upsert.sql.jinja",
+      "lines": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "delete",
+      "title": "100 delete: rows of deleted forms",
+      "file": "airflow/sql/temp/hdx/100_delete.sql.jinja",
+      "lines": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "cat_touched",
+      "title": "Categorized 010: forms this run touched",
+      "file": "airflow/sql/temp/hdx_categorized/010_touched.sql.jinja",
+      "lines": [
+        1,
+        9
+      ]
+    },
+    {
+      "id": "blob",
+      "title": "Categorized 020: the complete blob",
+      "note": "Filled only when the form is COMPLETE and no field's complete value is NULL.",
+      "file": "airflow/sql/temp/hdx_categorized/020_source.sql.jinja",
+      "lines": [
+        1,
+        73
+      ],
+      "tests": [
+        {
+          "file": "airflow/tests/scenarios/temp_hdx_entry_types/01_build/expected/silver.temp_hdx_categorized.csv",
+          "label": "expected categorized (step 1)"
+        },
+        {
+          "file": "airflow/tests/scenarios/temp_hdx_entry_types/02_settled/expected/silver.temp_hdx_categorized.csv",
+          "label": "expected categorized (step 2)"
+        }
+      ]
+    },
+    {
+      "id": "cat_deleted",
+      "title": "Categorized 030: forms gone from silver.temp_hdx",
+      "file": "airflow/sql/temp/hdx_categorized/030_deleted.sql.jinja",
+      "lines": [
+        1,
+        8
+      ]
+    },
+    {
+      "id": "cat_upsert",
+      "title": "Categorized 040: upsert",
+      "file": "airflow/sql/temp/hdx_categorized/040_upsert.sql.jinja",
+      "lines": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "cat_delete",
+      "title": "Categorized 050: delete gone forms",
+      "file": "airflow/sql/temp/hdx_categorized/050_delete.sql.jinja",
+      "lines": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "route",
+      "title": "Console routes /dq/hdx-test",
+      "file": "dq-console/blueprints/dq/views.py",
+      "lines": [
+        262,
+        301
+      ],
+      "tests": [
+        {
+          "file": "dq-console/tests/test_dq_temp_hdx.py",
+          "label": "test_dq_temp_hdx.py"
+        }
+      ]
+    },
+    {
+      "id": "nav",
+      "title": "HDX test nav link",
+      "file": "dq-console/templates/base.html",
+      "lines": [
+        38,
+        52
+      ]
+    },
+    {
+      "id": "service",
+      "title": "Console service: counts, list, form",
+      "file": "dq-console/services/temp_hdx.py",
+      "lines": [
+        1,
+        163
+      ]
+    },
+    {
+      "id": "list_page",
+      "title": "List page: counts and form browser",
+      "file": "dq-console/templates/dq/temp_hdx.html",
+      "lines": [
+        1,
+        94
+      ]
+    },
+    {
+      "id": "form_page",
+      "title": "Form page: entry 1, entry 2, complete",
+      "file": "dq-console/templates/dq/temp_hdx_form.html",
+      "lines": [
+        1,
+        91
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "dags",
+      "to": "build",
+      "label": "temp_dag(\"hdx\", …)",
+      "description": "Each temp_dag call registers one DAG. temp_load_hdx is scheduled on the bronze HDX window extracts plus silver.slim; temp_load_hdx_categorized on the temp hdx asset."
+    },
+    {
+      "from": "build",
+      "to": "run_model",
+      "label": "run_model(layer=TEMP, buckets)",
+      "description": "The build task resolves the window from the watermark (or the window_start param) and hands it to run_model with layer=TEMP and the run's buckets param."
+    },
+    {
+      "from": "run_model",
+      "to": "maps",
+      "label": "per bucket",
+      "description": "run_model renders each step under temp/hdx in order, once per bucket of keys; 010 maps is the first."
+    },
+    {
+      "from": "maps",
+      "to": "deleted",
+      "description": "staging.temp_hdx_maps holds the mappings to rebuild this run; 020 finds which of their forms, or mappings, are now tombstoned."
+    },
+    {
+      "from": "spine",
+      "to": "entry_type",
+      "label": "entry_type(...)",
+      "description": "The spine's SELECT calls the entry_type macro on its joined rows, so each form gets its label in the same pass."
+    },
+    {
+      "from": "gate",
+      "to": "agree",
+      "label": "verdicts",
+      "description": "080 joins each form's verdict: its accession number, or the reason it would be withheld."
+    },
+    {
+      "from": "entry_type",
+      "to": "agree",
+      "description": "The spine's entry_type travels with each form into 080 and onto every field row."
+    },
+    {
+      "from": "agree",
+      "to": "complete_value",
+      "description": "The per-field agree flag decides whether the agreed value can be the complete value."
+    },
+    {
+      "from": "complete_value",
+      "to": "upsert",
+      "description": "080 writes the finished field rows to staging.temp_hdx_source; 090 upserts them into silver.temp_hdx by row_key."
+    },
+    {
+      "from": "upsert",
+      "to": "service",
+      "label": "reads silver.temp_hdx",
+      "description": "The form view reads one form's field rows from silver.temp_hdx: both entries, the complete value and the agree flag per field."
+    },
+    {
+      "from": "route",
+      "to": "service",
+      "description": "Each route calls the service: summary, protocols and forms for the list; form for one mapping."
+    },
+    {
+      "from": "deleted",
+      "to": "entry_data",
+      "description": "With the deleted forms known, 030 gathers the field values for every entry of the mappings in scope."
+    },
+    {
+      "from": "entry_data",
+      "to": "spine",
+      "description": "The spine joins each mapping to its enrollment, subject, protocol and both entries, reading ACC_ID from the entry data and skipping deleted forms."
+    },
+    {
+      "from": "spine",
+      "to": "audit",
+      "description": "050 reads the audit history of the spine's entries to find the latest superuser resolution of each field."
+    },
+    {
+      "from": "audit",
+      "to": "candidates",
+      "description": "060 gathers the accession evidence (raw value, ACC and external fields, bridge) for every spine form, one row per form."
+    },
+    {
+      "from": "audit",
+      "to": "complete_value",
+      "label": "superuser choices",
+      "description": "A resolved field's superuser choice wins over both entries when 080 picks the complete value."
+    },
+    {
+      "from": "candidates",
+      "to": "accession_sql",
+      "description": "070 is just a SELECT over the candidates; PYTHON_STEPS routes it to Python instead of running it as SQL."
+    },
+    {
+      "from": "accession_sql",
+      "to": "gate",
+      "label": "PYTHON_STEPS → temp_gate",
+      "description": "run_step streams the SELECT's rows into hdx.temp_gate, which runs the accession ladder on each and writes verdicts to staging.temp_hdx_accession."
+    },
+    {
+      "from": "upsert",
+      "to": "delete",
+      "description": "After the upsert, 100 writes a deleted version of every row whose form is in staging.temp_hdx_deleted."
+    },
+    {
+      "from": "delete",
+      "to": "cat_touched",
+      "label": "temp_load_hdx_categorized",
+      "description": "When temp_load_hdx finishes it emits the temp hdx asset, which triggers temp_load_hdx_categorized; its 010 finds the forms whose rows landed in the window."
+    },
+    {
+      "from": "cat_touched",
+      "to": "blob",
+      "description": "020 pivots each touched form's live field rows into the entry1, entry2 and complete JSON maps."
+    },
+    {
+      "from": "blob",
+      "to": "cat_deleted",
+      "description": "030 finds touched forms with no live silver.temp_hdx row left, so their categorized row can go."
+    },
+    {
+      "from": "cat_deleted",
+      "to": "cat_upsert",
+      "description": "040 upserts the pivoted forms into silver.temp_hdx_categorized."
+    },
+    {
+      "from": "cat_upsert",
+      "to": "cat_delete",
+      "description": "050 writes a deleted version for the forms 030 found."
+    },
+    {
+      "from": "sql_py",
+      "to": "entry_type",
+      "label": "template_module(macros/temp_hdx)",
+      "description": "template_module loads the macro file as a module, so tests can read its column lists rather than repeating them."
+    },
+    {
+      "from": "nav",
+      "to": "route",
+      "label": "/dq/hdx-test",
+      "description": "The HDX test link in the console's top bar opens /dq/hdx-test."
+    },
+    {
+      "from": "route",
+      "to": "list_page",
+      "label": "render_template",
+      "description": "The list route renders temp_hdx.html with the counts, filters and the page of forms."
+    },
+    {
+      "from": "route",
+      "to": "form_page",
+      "label": "render_template",
+      "description": "The form route renders temp_hdx_form.html with entry 1, entry 2 and complete side by side; an unknown form is a 404."
+    },
+    {
+      "from": "cat_upsert",
+      "to": "service",
+      "label": "reads categorized",
+      "description": "Counts and the form list read silver.temp_hdx_categorized, one row per form, filtered by entry type, accession hold and protocol."
+    }
+  ],
+  "notes": {}
+}
