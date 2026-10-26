@@ -11,7 +11,7 @@
   --bg: #eef0f3; --dots: #d3d8df; --panel: #ffffff; --fg: #1d2330; --muted: #5d6677; --line: #d9dee6;
   --accent: #0b6e75; --accent-soft: #dff0f1; --edge: #8b95a5;
   --add-bg: #e3f5e8; --add-mark: #2f9e55; --del-bg: #fcebeb; --del-mark: #c94141; --fold-bg: #f1f3f7;
-  --lane: #f7f8fa;
+  --lane: #f7f8fa; --group-bg: #e3e8ee; --group-line: #b9c2ce;
   --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
@@ -19,12 +19,12 @@
   --bg: #101318; --dots: #232934; --panel: #1a1e26; --fg: #e3e7ee; --muted: #9aa3b2; --line: #2d3440;
   --accent: #4fc3c9; --accent-soft: #163236; --edge: #66707f;
   --add-bg: #14301e; --add-mark: #4cc372; --del-bg: #3a1a1c; --del-mark: #ef6b6b; --fold-bg: #202631;
-  --lane: #151920; color-scheme: dark } }
+  --lane: #151920; --group-bg: #161c24; --group-line: #3a4452; color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #101318; --dots: #232934; --panel: #1a1e26; --fg: #e3e7ee; --muted: #9aa3b2; --line: #2d3440;
   --accent: #4fc3c9; --accent-soft: #163236; --edge: #66707f;
   --add-bg: #14301e; --add-mark: #4cc372; --del-bg: #3a1a1c; --del-mark: #ef6b6b; --fold-bg: #202631;
-  --lane: #151920; color-scheme: dark }
+  --lane: #151920; --group-bg: #161c24; --group-line: #3a4452; color-scheme: dark }
 html, body { height: 100%; }
 body { background: var(--bg); color: var(--fg); font: 14px/1.5 var(--sans); display: flex; flex-direction: column; overflow: hidden; }
 a { color: var(--accent); }
@@ -56,6 +56,15 @@ body.show-desc .elabel .desc { display: block; font: 12px/1.45 var(--sans); colo
 body.show-desc .elabel .call:empty { display: none; }
 .node { position: absolute; display: flex; align-items: flex-start; transition: left .25s ease, top .25s ease; }
 .box { width: 300px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,.06); cursor: default; }
+.node[hidden], .frame[hidden] { display: none !important; }
+.frame { position: absolute; border: 1.5px dashed var(--group-line); border-radius: 14px; background: var(--group-bg); transition: left .25s ease, top .25s ease, width .25s ease, height .25s ease; }
+.legend { position: absolute; top: -15px; left: 16px; display: inline-flex; align-items: center; gap: 8px; font: 600 12.5px/1 var(--sans); color: var(--fg); background: var(--panel); border: 1.5px solid var(--group-line); border-radius: 999px; padding: 7px 12px; cursor: pointer; white-space: nowrap; }
+.legend:hover, .legend:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+.legend .tw { transform: rotate(90deg); }
+.legend .count { font: 500 11.5px var(--mono); color: var(--muted); }
+.groupnode .box { border: 2px solid var(--group-line); background: var(--group-bg); width: 320px; }
+.groupnode .box .head { font-size: 14px; }
+.groupnode .box:hover { border-color: var(--accent); }
 .node.open .box { width: max-content; min-width: 300px; border-color: var(--accent); }
 .node.nocode .box { border-style: dashed; }
 .head { display: grid; grid-template-columns: auto 1fr auto auto; gap: 8px; align-items: baseline; width: 100%; text-align: left; background: none; border: 0; color: var(--fg); font: 600 13.5px/1.35 var(--sans); padding: 10px 12px 4px; cursor: pointer; border-radius: 10px 10px 0 0; }
@@ -118,6 +127,7 @@ label.tool input { margin: 0; accent-color: var(--accent); }
     <div class="tools">
       <label class="tool" for="showTests"><input type="checkbox" id="showTests"> Show tests</label>
       <label class="tool" for="showDesc"><input type="checkbox" id="showDesc"> Show descriptions</label>
+      <button class="tool" id="groupsBtn" type="button" hidden>Collapse groups</button>
       <button class="tool" id="openAll" type="button">Expand all</button>
       <button class="tool" id="closeAll" type="button">Collapse all</button>
       <button class="tool icon" id="zoomOut" type="button" aria-label="Zoom out">−</button>
@@ -231,40 +241,136 @@ label.tool input { margin: 0; accent-color: var(--accent); }
     if (n.open) { node.classList.add("open"); head.setAttribute("aria-expanded", "true"); const c = box.querySelector(".code"); if (c) c.hidden = false; }
   });
 
-  const labelEls = D.edges.map((e) => {
-    const l = el("div", "elabel"); l.append(el("span", "call", e.label || ""));
-    if (e.description) l.append(el("span", "desc", e.description));
-    stage.append(l); return l;
+  // Groups: a frame around their boxes, or one box standing in for all of them while collapsed.
+  const groups = D.groups || [];
+  const groupOf = Object.fromEntries(D.nodes.filter((n) => n.group).map((n) => [n.id, n.group]));
+  const collapsed = new Set(groups.filter((gr) => gr.collapsed).map((gr) => gr.id));
+  const groupEls = {}, frameEls = {};
+  const isHidden = (id) => !!groupOf[id] && collapsed.has(groupOf[id]);
+  function setGroup(id, collapse) {
+    const from = collapse ? frameEls[id] : groupEls[id];
+    if (collapse) collapsed.add(id); else collapsed.delete(id);
+    layout({ from: from.querySelector(collapse ? ".legend" : ".head") || from, to: collapse ? "grp-" + id : "frame-" + id });
+    syncGroupsBtn();
+  }
+  groups.forEach((gr) => {
+    const members = D.nodes.filter((n) => n.group === gr.id);
+    const files = new Set(members.filter((n) => n.code).map((n) => n.code.file));
+    const tests = members.reduce((t, n) => t + n.tests.length, 0);
+    const summary = `${members.length} box${members.length === 1 ? "" : "es"} · ${files.size} file${files.size === 1 ? "" : "s"}` + (tests ? ` · ${tests} test${tests === 1 ? "" : "s"}` : "");
+    const node = el("div", "node groupnode"); node.id = "grp-" + gr.id;
+    const box = el("div", "box");
+    const head = el("button", "head"); head.type = "button"; head.setAttribute("aria-expanded", "false");
+    // A group's +/− is its files' whole diffs, each file once, not just the lines its boxes show.
+    const totals = [...files].reduce((t, f) => { const st = D.file_stats[f] || [0, 0]; return [t[0] + st[0], t[1] + st[1]]; }, [0, 0]);
+    const stat = el("span", "stat"); stat.append(el("span", "p", `+${totals[0]}`), " ", el("span", "m", `−${totals[1]}`));
+    head.append(el("span", "tw", "▶"), el("span", "t", gr.title), stat);
+    box.append(head, el("div", "sub", summary));
+    if (gr.note) box.append(el("div", "note", gr.note));
+    head.addEventListener("click", () => setGroup(gr.id, false));
+    node.append(box); stage.append(node); groupEls[gr.id] = node;
+    const frame = el("div", "frame"); frame.id = "frame-" + gr.id;
+    const legend = el("button", "legend"); legend.type = "button"; legend.setAttribute("aria-expanded", "true");
+    legend.title = "Collapse this group";
+    legend.append(el("span", "tw", "▶"), el("span", null, gr.title), el("span", "count", summary));
+    legend.addEventListener("click", () => setGroup(gr.id, true));
+    frame.append(legend); stage.insertBefore(frame, svg); frameEls[gr.id] = frame;
   });
-  const showsLabel = (e) => !!e.label || (document.body.classList.contains("show-desc") && !!e.description);
 
-  function layout(anchorId) {
-    let before = null;
-    if (anchorId) { const r = document.getElementById(anchorId).getBoundingClientRect(); before = { x: r.left, y: r.top }; }
-    const g = new dagre.graphlib.Graph({ multigraph: true });
-    g.setGraph({ rankdir: D.rankdir, nodesep: 46, ranksep: 70, edgesep: 24, marginx: 30, marginy: 30 });
+  // The arrows to draw: an end inside a collapsed group moves to the group's box, arrows inside one
+  // group vanish, and several arrows between the same two ends merge into one.
+  function visibleEdges() {
+    const end = (id) => (isHidden(id) ? "grp:" + groupOf[id] : id);
+    const merged = new Map();
+    D.edges.forEach((e) => {
+      const a = end(e.from), b = end(e.to); if (a === b) return;
+      const k = a + " " + b; if (!merged.has(k)) merged.set(k, { from: a, to: b, items: [] }); merged.get(k).items.push(e);
+    });
+    return [...merged.values()].map((m) => (m.items.length === 1
+      ? { ...m, label: m.items[0].label, description: m.items[0].description }
+      : { ...m, label: `${m.items.length} connections`, description: m.items.map((e) => e.label || e.description).join(" · ") }));
+  }
+  const elFor = (id) => (id.startsWith("grp:") ? groupEls[id.slice(4)] : nodeEls[id]);
+
+  function layout(anchor) {
+    let before = null, anchorId = null;
+    if (anchor) {
+      const from = typeof anchor === "string" ? document.getElementById(anchor) : anchor.from;
+      anchorId = typeof anchor === "string" ? anchor : anchor.to;
+      const r = from.getBoundingClientRect(); before = { x: r.left, y: r.top };
+      if (typeof anchor !== "string") { const f = from.closest(".frame, .node"); if (f) { const fr = f.getBoundingClientRect(); before = { x: fr.left, y: fr.top }; } }
+    }
+    D.nodes.forEach((n) => { nodeEls[n.id].hidden = isHidden(n.id); });
+    groups.forEach((gr) => { const c = collapsed.has(gr.id); groupEls[gr.id].hidden = !c; frameEls[gr.id].hidden = c; });
+    const grouped = groups.length > 0;
+    const g = new dagre.graphlib.Graph({ multigraph: true, compound: true });
+    g.setGraph({ rankdir: D.rankdir, nodesep: grouped ? 84 : 46, ranksep: grouped ? 90 : 70, edgesep: 24, marginx: 40, marginy: 50 });
     g.setDefaultEdgeLabel(() => ({}));
-    D.nodes.forEach((n) => { const e = nodeEls[n.id]; g.setNode(n.id, { width: e.offsetWidth, height: e.offsetHeight }); });
-    D.edges.forEach((e, i) => { const l = labelEls[i], on = showsLabel(e); l.hidden = !on; g.setEdge(e.from, e.to, { width: on ? l.offsetWidth : 0, height: on ? l.offsetHeight : 0, labelpos: "c" }, "e" + i); });
+    groups.forEach((gr) => {
+      if (collapsed.has(gr.id)) { const e = groupEls[gr.id]; g.setNode("grp:" + gr.id, { width: e.offsetWidth, height: e.offsetHeight }); }
+      else g.setNode("cl:" + gr.id, {});
+    });
+    D.nodes.forEach((n) => {
+      if (isHidden(n.id)) return;
+      const e = nodeEls[n.id]; g.setNode(n.id, { width: e.offsetWidth, height: e.offsetHeight });
+      if (groupOf[n.id]) g.setParent(n.id, "cl:" + groupOf[n.id]);
+    });
+    stage.querySelectorAll(".elabel").forEach((l) => l.remove());
+    const showDesc = document.body.classList.contains("show-desc");
+    const edges = visibleEdges();
+    edges.forEach((e, i) => {
+      e.el = null;
+      if (e.label || (showDesc && e.description)) {
+        const l = el("div", "elabel"); l.append(el("span", "call", e.label || ""));
+        if (e.description) l.append(el("span", "desc", e.description));
+        stage.append(l); e.el = l;
+      }
+      g.setEdge(e.from, e.to, { width: e.el ? e.el.offsetWidth : 0, height: e.el ? e.el.offsetHeight : 0, labelpos: "c" }, "e" + i);
+    });
     dagre.layout(g);
-    D.nodes.forEach((n) => { const p = g.node(n.id), e = nodeEls[n.id]; e.style.left = (p.x - p.width / 2) + "px"; e.style.top = (p.y - p.height / 2) + "px"; });
+    const place = (e, p) => { e.style.left = (p.x - p.width / 2) + "px"; e.style.top = (p.y - p.height / 2) + "px"; };
+    D.nodes.forEach((n) => { if (!isHidden(n.id)) place(nodeEls[n.id], g.node(n.id)); });
+    groups.forEach((gr) => {
+      if (collapsed.has(gr.id)) { place(groupEls[gr.id], g.node("grp:" + gr.id)); return; }
+      // Frame the member boxes themselves: dagre's cluster bounds run wider than its members.
+      const f = frameEls[gr.id], pad = 22, box = [Infinity, Infinity, -Infinity, -Infinity];
+      D.nodes.forEach((n) => {
+        if (groupOf[n.id] !== gr.id) return;
+        const p = g.node(n.id);
+        box[0] = Math.min(box[0], p.x - p.width / 2); box[1] = Math.min(box[1], p.y - p.height / 2);
+        box[2] = Math.max(box[2], p.x + p.width / 2); box[3] = Math.max(box[3], p.y + p.height / 2);
+      });
+      f.style.left = (box[0] - pad) + "px"; f.style.top = (box[1] - pad - 10) + "px";
+      f.style.width = (box[2] - box[0] + 2 * pad) + "px"; f.style.height = (box[3] - box[1] + 2 * pad + 10) + "px";
+    });
     const gr = g.graph(); graphSize = { w: gr.width, h: gr.height };
     svg.setAttribute("width", gr.width); svg.setAttribute("height", gr.height);
     svg.querySelectorAll("path.edge").forEach((p) => p.remove());
-    D.edges.forEach((e, i) => {
+    edges.forEach((e, i) => {
       const ed = g.edge(e.from, e.to, "e" + i), pts = ed.points;
       let d = `M${pts[0].x},${pts[0].y}`;
       for (let j = 1; j < pts.length - 1; j++) { const mx = (pts[j].x + pts[j + 1].x) / 2, my = (pts[j].y + pts[j + 1].y) / 2; d += ` Q${pts[j].x},${pts[j].y} ${mx},${my}`; }
       d += ` L${pts[pts.length - 1].x},${pts[pts.length - 1].y}`;
       const path = document.createElementNS("http://www.w3.org/2000/svg", "path"); path.setAttribute("d", d); path.setAttribute("class", "edge"); path.setAttribute("marker-end", "url(#arrow)"); svg.append(path);
-      if (showsLabel(e)) { labelEls[i].style.left = ed.x + "px"; labelEls[i].style.top = ed.y + "px"; }
+      if (e.el) { e.el.style.left = ed.x + "px"; e.el.style.top = ed.y + "px"; }
     });
     if (before) {
-      // Keep the box that was clicked where it was on screen; nodes move with a transition, so use the target position.
+      // Keep what was clicked where it was on screen; boxes move with a transition, so use the target position.
       const e = document.getElementById(anchorId), vr = viewport.getBoundingClientRect();
       const nx = parseFloat(e.style.left) * view.k + view.x + vr.left, ny = parseFloat(e.style.top) * view.k + view.y + vr.top;
       view.x += before.x - nx; view.y += before.y - ny; apply();
     }
+  }
+
+  const groupsBtn = $("#groupsBtn");
+  function syncGroupsBtn() { groupsBtn.textContent = collapsed.size < groups.length ? "Collapse groups" : "Expand groups"; }
+  if (groups.length) {
+    groupsBtn.hidden = false; syncGroupsBtn();
+    groupsBtn.addEventListener("click", () => {
+      const collapse = collapsed.size < groups.length;
+      groups.forEach((gr) => { if (collapse) collapsed.add(gr.id); else collapsed.delete(gr.id); });
+      layout(null); syncGroupsBtn();
+    });
   }
 
   function fit() {
@@ -275,7 +381,7 @@ label.tool input { margin: 0; accent-color: var(--accent); }
   function start() {
     // Readable first view: full size, flow's top centered; Fit shows the whole board.
     // Center the first box; if it's wider than the screen, line its left edge up with the gutter.
-    const vw = viewport.clientWidth, first = nodeEls[D.nodes[0].id];
+    const vw = viewport.clientWidth, n0 = D.nodes[0], first = isHidden(n0.id) ? groupEls[groupOf[n0.id]] : nodeEls[n0.id];
     view.k = Math.min(1, Math.max(0.6, (vw - 32) / graphSize.w));
     const left = parseFloat(first.style.left), w = first.offsetWidth;
     view.x = Math.max(vw / 2 - (left + w / 2) * view.k, 16 - left * view.k);

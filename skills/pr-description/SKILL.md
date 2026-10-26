@@ -15,6 +15,7 @@ A PR gets two things:
    - clicking a box opens its diff with surrounding context, and long unchanged stretches stay folded until clicked;
    - arrows follow the calls, labeled with the call itself (`run_model(layer=TEMP)`). Each arrow also has a one- or two-sentence description of what passes along it, shown when **Show descriptions** is checked;
    - every test file sits beside the box of code it checks. A **Show tests** checkbox at the top shows or hides all the test lanes, and each test stays collapsed until clicked. While tests are hidden, a box shows how many it has;
+   - boxes can be grouped by component (an Airflow pipeline, the DQ console, a deployment). Each group is a framed area whose header collapses it into one box showing its files, tests and +/−. Arrows into a collapsed group attach to that box, and **Collapse groups** folds them all;
    - every Core file is a box on the diagram; the **Other files** panel holds only migrations, docs, config and generated files;
    - the canvas pans and zooms (drag, Ctrl/pinch to zoom, Fit), and opening a box keeps it where it was on screen.
 
@@ -81,6 +82,7 @@ No diagrams, code or tables in the body.
 4. **Build the page.** Run `python3 <skill-dir>/scripts/build_review_page.py spec.json <name>-review.html --base origin/<base>`. It refuses a spec that has problems, such as:
    - a line range outside its file, or a box longer than 200 lines;
    - an arrow to an unknown box, an arrow with no `description`, or a box with no arrows;
+   - a box in a group that isn't defined, or a group with no boxes;
    - a Core file with no box on the diagram;
    - a test file that isn't beside any box.
 
@@ -109,10 +111,14 @@ The title is a short sentence in the imperative, under ~70 characters, with no p
   "pr": 362,                                 // omit before the PR exists
   "summary": "The body's summary paragraph.",
   "rankdir": "TB",                           // TB top-to-bottom (default) or LR
+  "groups": [                                // optional; see "Groups" below
+    {"id": "airflow", "title": "Airflow: gold.dim_artifacts", "note": "What this part of the PR does."},
+    {"id": "console", "title": "DQ console: artifact types", "collapsed": false}
+  ],
   "nodes": [
     {"id": "spine", "title": "040 spine: left joins replace the gate",
      "note": "One sentence a reviewer needs before opening it.",
-     "file": "path/at/head.sql", "lines": [1, 81],
+     "file": "path/at/head.sql", "lines": [1, 81], "group": "airflow",
      "tests": [{"file": "tests/test_x.py", "lines": [95, 108], "label": "test_x.py: the case"}],
      "open": false}                          // true to open it on load; use for the entry point only
   ],
@@ -127,6 +133,12 @@ The title is a short sentence in the imperative, under ~70 characters, with no p
 - Include unchanged code when the reader needs it to follow the path: the existing function a new one plugs into, for example. Its lines show as context, not as green.
 - Shared code whose change reaches beyond this feature gets its own box, with the note saying so.
 - **Every Core file gets a box.** Core is the code that matters, so none of it is relegated to the side panel. That includes small mechanical ones (a two-line upsert, a nav link, a template), each placed where it runs in the flow. A big PR simply has more boxes.
+
+**Groups.** When a PR spans more than one component (Airflow and the DQ console, say, or an app and its deployment), give each component a group and put every box in one.
+- Name each group after the component and what this PR does in it: "Airflow: gold.dim_artifacts", "DQ console: artifact types".
+- Its note is one sentence on that component's part of the change.
+- Groups stay open by default. Set `"collapsed": true` only for a group a reviewer is likely to skip, such as a generated client.
+- A PR inside one component doesn't need groups.
 
 **Arrows** are calls, reads, writes or triggers, in run order. Label one when the call or argument matters (`run_model(layer=TEMP, buckets)`, `reads silver.temp_hdx`). Leave obvious next-step arrows unlabeled. Branches and joins are fine: the layout handles them.
 

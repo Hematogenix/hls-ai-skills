@@ -144,7 +144,7 @@ def main():
             problems.append(f"{where}: duplicate id.")
         ids.add(nid)
         node = {"id": nid, "title": n.get("title", ""), "note": n.get("note", ""), "code": None, "tests": [],
-                "open": bool(n.get("open"))}
+                "open": bool(n.get("open")), "group": n.get("group")}
         if not node["title"]:
             problems.append(f"{where}: needs a `title`.")
         if n.get("file"):
@@ -158,6 +158,22 @@ def main():
                 node["tests"].append(ref)
                 in_flow.add(t["file"])
         nodes.append(node)
+    groups = []
+    for j, gr in enumerate(spec.get("groups") or []):
+        gid = gr.get("id")
+        if not gid or not re.fullmatch(r"[A-Za-z0-9_-]+", gid) or not gr.get("title"):
+            problems.append(f"groups[{j}]: give it an `id` of letters, digits, - or _, and a `title`.")
+            continue
+        if gid in {g["id"] for g in groups}:
+            problems.append(f"groups[{gid}]: duplicate id.")
+        groups.append({"id": gid, "title": gr["title"], "note": gr.get("note", ""), "collapsed": bool(gr.get("collapsed"))})
+    group_ids = {g["id"] for g in groups}
+    for n in nodes:
+        if n["group"] and n["group"] not in group_ids:
+            problems.append(f"nodes[{n['id']}]: group `{n['group']}` isn't in `groups`.")
+    for g in groups:
+        if not any(n["group"] == g["id"] for n in nodes):
+            problems.append(f"groups[{g['id']}]: no box is in it.")
     edges = []
     for k, e in enumerate(spec["edges"]):
         for end in ("from", "to"):
@@ -202,7 +218,8 @@ def main():
     data = {
         "title": spec["title"], "repo": spec["repo"], "pr": spec.get("pr"), "summary": spec["summary"],
         "rankdir": spec.get("rankdir", "TB"), "base": base, "head": a.head,
-        "head_sha": git("rev-parse", a.head).strip(), "nodes": nodes, "edges": edges, "others": others,
+        "head_sha": git("rev-parse", a.head).strip(), "nodes": nodes, "edges": edges, "groups": groups,
+        "file_stats": {p: [f["add"], f["del"]] for p, f in repo.changed.items()}, "others": others,
         "totals": [[g, *totals[g]] for g in GROUPS if g in totals],
     }
     payload = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
@@ -210,7 +227,7 @@ def main():
     page = page.replace("__TITLE__", html.escape(spec.get("page_title") or f"PR {spec.get('pr', '')} review".strip()))
     page = page.replace("__DATA__", payload)
     Path(a.out).write_text(page)
-    print(f"Wrote {a.out}: {len(nodes)} boxes, {len(edges)} arrows, "
+    print(f"Wrote {a.out}: {len(nodes)} boxes in {len(groups)} groups, {len(edges)} arrows, "
           f"{sum(len(n['tests']) for n in nodes)} tests beside boxes, {len(others)} other files.")
 
 

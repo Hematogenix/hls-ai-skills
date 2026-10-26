@@ -15,7 +15,8 @@
         1,
         14
       ],
-      "open": true
+      "open": true,
+      "group": "airflow"
     },
     {
       "id": "build",
@@ -35,7 +36,8 @@
           ],
           "label": "test_dags.py: one task"
         }
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "run_model",
@@ -51,7 +53,8 @@
           "file": "airflow/tests/live/scenarios.py",
           "label": "live/scenarios.py"
         }
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "maps",
@@ -70,7 +73,8 @@
           "file": "airflow/tests/scenarios/temp_hdx_entry_types/02_settled/bronze/hdx_patient_protocol_entry_mapping.csv",
           "label": "scenario 2: mappings, one deleted (input)"
         }
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "deleted",
@@ -79,7 +83,8 @@
       "lines": [
         1,
         42
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "entry_data",
@@ -98,7 +103,8 @@
           "file": "airflow/tests/scenarios/temp_hdx_entry_types/02_settled/bronze/hdx_patient_protocol_entry_data.csv",
           "label": "scenario 2: settled values (input)"
         }
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "spine",
@@ -134,7 +140,8 @@
           "file": "airflow/tests/scenarios/temp_hdx_entry_types/01_build/bronze/hdx_hls_user.csv",
           "label": "scenario 1: users (input)"
         }
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "audit",
@@ -150,7 +157,8 @@
           "file": "airflow/tests/scenarios/temp_hdx_entry_types/02_settled/bronze/hdx_hls_audit.csv",
           "label": "scenario 2: superuser resolution (input)"
         }
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "entry_type",
@@ -160,7 +168,8 @@
       "lines": [
         24,
         36
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "sql_py",
@@ -180,7 +189,8 @@
           ],
           "label": "test_migrations.py: temp models"
         }
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "candidates",
@@ -189,7 +199,8 @@
       "lines": [
         1,
         124
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "accession_sql",
@@ -199,7 +210,8 @@
       "lines": [
         1,
         3
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "gate",
@@ -209,7 +221,8 @@
       "lines": [
         1,
         41
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "agree",
@@ -219,7 +232,8 @@
       "lines": [
         60,
         80
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "complete_value",
@@ -243,7 +257,8 @@
           "file": "airflow/tests/scenarios/temp_hdx_entry_types/README.md",
           "label": "scenario README: what each form covers"
         }
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "upsert",
@@ -252,7 +267,8 @@
       "lines": [
         1,
         2
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "delete",
@@ -261,7 +277,8 @@
       "lines": [
         1,
         2
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "cat_touched",
@@ -270,7 +287,8 @@
       "lines": [
         1,
         9
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "blob",
@@ -290,7 +308,8 @@
           "file": "airflow/tests/scenarios/temp_hdx_entry_types/02_settled/expected/silver.temp_hdx_categorized.csv",
           "label": "expected categorized (step 2)"
         }
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "cat_deleted",
@@ -299,7 +318,8 @@
       "lines": [
         1,
         8
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "cat_upsert",
@@ -308,7 +328,8 @@
       "lines": [
         1,
         2
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "cat_delete",
@@ -317,7 +338,8 @@
       "lines": [
         1,
         2
-      ]
+      ],
+      "group": "airflow"
     },
     {
       "id": "route",
@@ -332,7 +354,8 @@
           "file": "dq-console/tests/test_dq_temp_hdx.py",
           "label": "test_dq_temp_hdx.py"
         }
-      ]
+      ],
+      "group": "console"
     },
     {
       "id": "nav",
@@ -341,7 +364,8 @@
       "lines": [
         38,
         52
-      ]
+      ],
+      "group": "console"
     },
     {
       "id": "service",
@@ -350,7 +374,8 @@
       "lines": [
         1,
         163
-      ]
+      ],
+      "group": "console"
     },
     {
       "id": "list_page",
@@ -359,7 +384,8 @@
       "lines": [
         1,
         94
-      ]
+      ],
+      "group": "console"
     },
     {
       "id": "form_page",
@@ -368,7 +394,8 @@
       "lines": [
         1,
         91
-      ]
+      ],
+      "group": "console"
     }
   ],
   "edges": [
@@ -532,5 +559,17 @@
       "description": "Counts and the form list read silver.temp_hdx_categorized, one row per form, filtered by entry type, accession hold and protocol."
     }
   ],
-  "notes": {}
+  "notes": {},
+  "groups": [
+    {
+      "id": "airflow",
+      "title": "Airflow: the temp HDX models",
+      "note": "The temp DAGs and the steps that build silver.temp_hdx and silver.temp_hdx_categorized."
+    },
+    {
+      "id": "console",
+      "title": "DQ console: HDX test pages",
+      "note": "The nav link, routes, service and templates that browse the temp tables."
+    }
+  ]
 }
